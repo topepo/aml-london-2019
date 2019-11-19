@@ -579,6 +579,8 @@ penalty()
 
 mixture()
 
+glmn_param <- parameters(penalty(), mixture())
+
 glmn_grid <- grid_regular(glmn_param, levels = c(10, 5))
 glmn_grid %>% slice(1:4)
 
@@ -608,6 +610,13 @@ rf_set
 # Sets the range of mtry to be the number of predictors
 finalize(rf_set, mtcars %>% dplyr::select(-mpg))
 
+# How to find which parameters names in parsnip map to which model values:
+
+boost_tree(learn_rate = .1, loss_reduction = 4) %>% 
+  set_engine("xgboost") %>% 
+  set_mode("regression") %>% 
+  translate()
+
 # ------------------------------------------------------------------------------
 # Hands-On: K-NN Grids (slide 38)
 
@@ -617,6 +626,36 @@ finalize(rf_set, mtcars %>% dplyr::select(-mpg))
 # Create a parameter set for these three, make at least one grid, and plot them.
 
 library(tidymodels)
+
+knn_param <- parameters(neighbors(), weight_func(), dist_power())
+
+knn_param %>% 
+  grid_regular(levels = c(5, 4, 5)) %>% 
+  ggplot(aes(x = neighbors, y = dist_power, col = weight_func)) + 
+  geom_point() + 
+  facet_wrap(~weight_func)
+
+
+knn_param <-
+  parameters(
+    neighbors(c(1, 100)), 
+    weight_func(values = c("rectangular", "triangular")), 
+    dist_power(c(1, 3))
+  )
+
+set.seed(9060)
+knn_grid <- 
+  parameters(neighbors(), weight_func(), dist_power()) %>% 
+  update(neighbors = neighbors(c(1, 500))) %>% 
+  grid_max_entropy(size = 300)
+
+
+recipe(Sale_Price ~ ., data = ames_train) %>% 
+  step_ns(Latitude,  deg_free = tune("lat df")) %>% 
+  step_ns(Longitude, deg_free = tune("#$^(@#$(")) %>% 
+  parameters() %>% 
+  grid_max_entropy(size = 4)
+
 
 # ------------------------------------------------------------------------------
 # Tagging Tuning parameterss (slide 40)
@@ -714,6 +753,20 @@ library(tune)
 
 data("Chicago")
 
+
+library(lubridate)
+
+Chicago %>% 
+  mutate(dow = wday(date, label = TRUE)) %>% 
+  ggplot(aes(x = date, y = ridership, col = dow)) + 
+  geom_point(alpha = .3)
+
+Chicago %>% 
+  ggplot(aes(x = Clark_Lake, y = ridership)) + 
+  geom_point(alpha = .3)
+
+
+
 # ------------------------------------------------------------------------------
 # A Recipe (slides 8-15)
 
@@ -746,6 +799,10 @@ data_folds <-
     cumulative = FALSE
   )
 data_folds %>% nrow()
+
+tidy(data_folds) %>% 
+  ggplot(aes(x = Row, y = Resample, fill = Data)) + 
+  geom_tile() 
 
 # ------------------------------------------------------------------------------
 # Tuning the Model (slide 24)
