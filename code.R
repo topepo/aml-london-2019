@@ -80,6 +80,26 @@ ames_lst_col %>%
 library(AmesHousing)
 ames <- make_ames()
 
+
+ggplot(ames, aes(x = Gr_Liv_Area)) + 
+  geom_histogram() +
+  scale_x_log10()
+
+ggplot(ames, aes(x = Sale_Price)) + 
+  geom_histogram()+
+  scale_x_log10()
+
+
+ggplot(ames, aes(x = TotRms_AbvGrd, y = Sale_Price)) + 
+  geom_point() +
+  scale_x_log10()
+
+ggplot(ames_train, aes(x = Sale_Price)) + 
+  geom_line(stat = "density", trim = TRUE)+ 
+  geom_line(data = ames_test, stat = "density", trim = TRUE, col = "red")+
+  scale_x_log10()
+
+
 # ------------------------------------------------------------------------------
 # Part 2: Data Splitting, Models, and Performance
 
@@ -274,9 +294,26 @@ mod_rec <-
   step_log(Sale_Price, base = 10) %>%
   # Lump factor levels that occur in 
   # <= 5% of data as "other"
-  step_other(Neighborhood, threshold = 0.05) %>%
+  step_other(Neighborhood, threshold = 0.05, id = "other") %>%
   # Create dummy variables for _any_ factor variables
   step_dummy(all_nominal())
+
+
+
+
+mod_rec_zv <- 
+  recipe(
+    Sale_Price ~ Longitude:Latitude + Neighborhood, 
+    data = ames_train
+  ) %>%
+  
+  step_log(Sale_Price, base = 10)%>% 
+  step_dummy(all_nominal()) %>%
+  step_zv(all_predictors()) %>% 
+  prep()
+
+
+starts_with("Central_Air"):Year_Built:Lot_Area
 
 # ------------------------------------------------------------------------------
 # Interactions (slide 23)
@@ -334,7 +371,7 @@ inverse_test_data <- bake(bivariate_rec, new_data = bivariate_data_test)
 # ------------------------------------------------------------------------------
 # Back to the Bivariate Example - Transformed Data (slide 34)
 
-ggplot(inverse_test, 
+ggplot(inverse_test_data, 
        aes(x = 1/PredictorA, 
            y = 1/PredictorB,
            color = Class)) +
@@ -506,6 +543,22 @@ easy_eval <-
     resamples = cv_splits,
     control = control_resamples(save_pred = TRUE)
   )
+
+collect_predictions(easy_eval) %>% 
+  mutate(Sale_Price = 10^Sale_Price, .pred = 10^.pred) %>% 
+  group_by(id) %>% do(rmse(., Sale_Price, .pred)) %>% 
+  pull(.estimate) %>%
+  mean()
+
+easy_eval_extract <- 
+  fit_resamples(
+    log10(Sale_Price) ~ Longitude + Latitude,
+    five_nn,
+    resamples = cv_splits,
+    control = control_resamples(save_pred = TRUE, extract = function(x) x$model)
+  )
+
+purrr::map(easy_eval_extract$.extracts, ~ .x$.extracts[[1]])
 
 # ------------------------------------------------------------------------------
 # Getting the statistics and predictions (slide 27)
